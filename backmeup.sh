@@ -39,7 +39,15 @@ function main() {
 		exit 0
 	fi
 
-	bash -c "time $COMMAND"
+	bash -c "RC=`$COMMAND`"
+
+    echo "Return code $RC"
+    if [ "$RC" = "0" ]
+    then
+        echo "Backup was successfull!"
+    else
+        echo "Backup failed!"
+    fi
 
 	if [ "$VERBOSE" = "true" ]
 	then
@@ -133,7 +141,7 @@ function getDestinationData() {
 
 	extractParamValues PASS_PHRASE
 	PASS_PHRASE=$PARAM_VALUE
-	checkUniqeMandatoryParam "$PASS_PHRASE" "pass phrase"
+	checkUniqeParam "$PASS_PHRASE" "pass phrase"
 
 	extractParamValues BACKUP_DIR
 	BACKUP_DIR=$PARAM_VALUE
@@ -155,6 +163,15 @@ function checkUniqeMandatoryParam() {
 	fi
 
 
+	local COUNT=`echo $1 | wc -w`
+    if [ $COUNT -gt "1" ]
+	then
+			echo "Multiple $2s ($COUNT) defined in $CONFIG_FILE! Currently only one backup host is supported."
+			exit 1
+	fi
+}
+
+function checkUniqeParam() {
 	local COUNT=`echo $1 | wc -w`
     if [ $COUNT -gt "1" ]
 	then
