@@ -7,8 +7,13 @@ function main() {
 	parseOptions "$@"
 	readConfig
 
-	local EXCLUDE_TEMP_FILE=`mktemp`
+	local TEMP_FOLDER=`mktemp -d -p /tmp backmeup.XXXXXXXX`
+	local EXCLUDE_TEMP_FILE=$TEMP_FOLDER"/exclude.txt"
+	local FIFO_FILE=$TEMP_FOLDER"/ssh.pipe"
+
 	echo $BACKUP_EXCLUDE | sed 's/ /\n/g' > $EXCLUDE_TEMP_FILE
+    mkfifo $FIFO_FILE
+
 
 	BACKUP_FILE_FULL_PATH=`echo $BACKUP_DIR | sed 's/\/ *$//g'`
 	BACKUP_FILE_FULL_PATH+="/$BACKUP_FILE"
@@ -24,7 +29,8 @@ function main() {
 	TAR_OPTIONS+="f"
 
 
-	COMMAND="tar --exclude-from $EXCLUDE_TEMP_FILE -$TAR_OPTIONS - $SOURCE_PATHES |ssh -i $CERTIFICATE $BACKUP_USER@$BACKUP_HOST \"cat > $BACKUP_FILE_FULL_PATH\""
+	TAR_COMMAND="tar --exclude-from $EXCLUDE_TEMP_FILE -$TAR_OPTIONS - $SOURCE_PATHES > $FIFO_FILE"
+	SSH_COMMAND="cat $FIFO_FILE | ssh -i $CERTIFICATE $BACKUP_USER@$BACKUP_HOST \"cat > $BACKUP_FILE_FULL_PATH\""
 
 	if [ "$VERBOSE" = "true" ]
 	then
@@ -39,10 +45,12 @@ function main() {
 		exit 0
 	fi
 
-	bash -c "RC=`$COMMAND`"
+    eval "$SSH_COMMAND &"
+	eval "$TAR_COMMAND"
 
-    echo "Return code $RC"
-    if [ "$RC" = "0" ]
+	RETURN_CODE=$?
+
+    if [ "$RETURN_CODE" = "0" ]
     then
         echo "Backup was successfull!"
     else
@@ -54,12 +62,18 @@ function main() {
 		echo "Cleaning up"
 	fi
 
+	sleep 1
+
 	rm $EXCLUDE_TEMP_FILE
+	rm $FIFO_FILE
+	rmdir $TEMP_FOLDER
 
 	if [ "$VERBOSE" = "true" ]
 	then
 		echo "Done"
 	fi
+
+	exit $RETURN_CODE
 }
 
 
